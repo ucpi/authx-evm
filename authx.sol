@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-
 contract verio {
  
   struct node{
       address nodeaddress;
       string organisation;
+      string noderpc;
   }
   node[] public nodes;
   //address => hash(Jwt mapping)
@@ -15,7 +15,7 @@ contract verio {
       
   }
   
-  mapping (address=>bytes32) public addjhash;
+  mapping (string=>bytes32) public addjhash;
   mapping (bytes32=>address) public jhashadd;
   mapping (bytes32=>bytes32) public addidhash;
   event Nodeadd(address nodeaddress,string organisation);
@@ -24,8 +24,9 @@ contract verio {
   mapping (string=>bool) public ifvoted;
   mapping (address=>string) public reversenodemap;
   mapping (string=>address) public prenodeaddress;
-    constructor(string memory org){
-      nodes.push(node(msg.sender,org));
+  mapping (string=>string) public prenoderpc;
+    constructor(string memory org,string memory noderpc){
+      nodes.push(node(msg.sender,org,noderpc));
       reversenodemap[msg.sender]=org;
    }
     function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _signature)
@@ -66,7 +67,7 @@ contract verio {
  function genesisnode() public view returns(string memory){
      return nodes[0].organisation;
  }
- function addnode(string memory organisation,bool _vote) external {
+ function addnode(string memory organisation,bool _vote) public {
      string memory _organisation=reversenodemap[msg.sender];
      bytes memory isorgempty = bytes(_organisation); 
      require(prenodeaddress[organisation]!=address(0),"no applicant node");
@@ -86,7 +87,7 @@ contract verio {
 
          if(nodevote[organisation].yesvote>=nodevote[_organisation].novote&&nodevote[organisation].yesvote>0){
              
-               nodes.push(node(prenodeaddress[organisation],organisation));  
+               nodes.push(node(prenodeaddress[organisation],organisation,prenoderpc[organisation]));  
                nodereplacer[organisation]=true;
                 reversenodemap[prenodeaddress[organisation]]=organisation;
          }
@@ -104,12 +105,13 @@ function nodecount() public view returns(uint){
      return nodes.length;
  }
 
-function authrlogin(bytes32 jwthash) external{
+function authxlogin(bytes32 jwthash,address contractadd) public{
 require(addidhash[jwthash] == 0,"jwt already used!");
-addjhash[msg.sender]=jwthash;
+string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
+addjhash[y]=jwthash;
 addidhash[jwthash]=bytes32("none");
 }
-function nodeaddreq(string memory organisation) external {
+function nodeaddreq(string memory organisation,string memory noderpc) public {
 for (uint x=0; x<nodes.length; x++) 
 {
  if(keccak256(abi.encodePacked(nodes[x].organisation))==keccak256(abi.encodePacked(organisation))){
@@ -120,9 +122,10 @@ require(nodereplacer[organisation]==false,"organisation voting pending wait for 
 emit Nodeadd(msg.sender,organisation);
 nodereplacer[organisation]=true;
 prenodeaddress[organisation]=msg.sender;
+prenoderpc[organisation]=noderpc;
 }  
 
-function authrsign(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno,bytes[] memory addo) external{
+function authrsign(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) public{
 require(_verifysigno.length==nodes.length,"Invalid number of verifier signature");
 require(_whoissigno.length==nodes.length,"Invalid number of whoissigno signature");
  uint jwtvote;
@@ -141,32 +144,61 @@ require(_whoissigno.length==nodes.length,"Invalid number of whoissigno signature
 
         addidhash[jwthash]=whois;
 }
-function op(string memory organisation) external view returns(uint){
+function op(string memory organisation) public view returns(uint){
   return nodevote[organisation].yesvote;
-
 }
+function islogin(address contractadd) public view returns(bool){
+string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
+if(addjhash[y]==""){
+    return false;
+}
+else{
+ 
+    if(addidhash[addjhash[y]]==bytes32("none")){
+        return false;
+    }
+    else{
+        return true;
+    }
+}
+}
+function logout(address contractadd) public {
+string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
+require(islogin(contractadd)==true,"you are not logged in");
+addjhash[y]="";
+//addidhash[addjhash[y]]=bytes32("none");
+}
+
+function getid(address contractadd) public view returns(bytes32){
+   require(islogin(contractadd)==true,"you are not logged in");
+   string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
+   return addidhash[addjhash[y]];  
+}
+
+
+//function whois(address contractadd) public view  
 /* just for testing recoverSigner testing
-function authsign1(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) external  pure returns(address){
+function authsign1(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) public  pure returns(address){
  address na;
         na=recoverSigner(jwthash, _verifysigno[0]);
      return na;
 }
-function authsign2(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) external  pure returns(address){
+function authsign2(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) public  pure returns(address){
  address na;
         na=recoverSigner(jwthash, _verifysigno[1]);
      return na;
 }
-function authsign3(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) external  pure returns(address){
+function authsign3(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) public  pure returns(address){
  address na;
         na=recoverSigner(whois, _whoissigno[0]);
      return na;
 }
-function authsign4(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) external  pure returns(address){
+function authsign4(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) public  pure returns(address){
  address na;
         na=recoverSigner(whois, _whoissigno[1]);
      return na;
 }
-function au(bytes32 jw,bytes[] memory x) external returns(address){
+function au(bytes32 jw,bytes[] memory x) public returns(address){
 address na;
         na=recoverSigner(jw,x[0]);
      return na;
@@ -181,4 +213,3 @@ address na;
 
 
 }
-Footer
