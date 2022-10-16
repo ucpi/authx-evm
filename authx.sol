@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 contract verio {
  
@@ -24,6 +25,7 @@ contract verio {
   mapping (address=>string) public reversenodemap;
   mapping (string=>address) public prenodeaddress;
   mapping (string=>string) public prenoderpc;
+  mapping (bytes32=>bool) public votingdone;
     constructor(string memory org,string memory noderpc){
       nodes.push(node(msg.sender,org,noderpc));
       reversenodemap[msg.sender]=org;
@@ -63,10 +65,10 @@ contract verio {
  function tmp(bytes[] memory _signo)public pure returns(uint){
   return _signo.length;
  }
- function genesisnode() public view returns(string memory){
+ function genesisnode() external view returns(string memory){
      return nodes[0].organisation;
  }
- function addnode(string memory organisation,bool _vote) public {
+ function addnode(string memory organisation,bool _vote) external {
      string memory _organisation=reversenodemap[msg.sender];
      bytes memory isorgempty = bytes(_organisation); 
      require(prenodeaddress[organisation]!=address(0),"no applicant node");
@@ -97,20 +99,21 @@ contract verio {
       
  }
 
- function nodeatindex(uint8 i) public view returns(string memory){
+ function nodeatindex(uint8 i) external view returns(string memory){
      return nodes[i].organisation;
  }
-function nodecount() public view returns(uint){
+function nodecount() external view returns(uint){
      return nodes.length;
  }
 
-function authxlogin(bytes32 jwthash,address contractadd) public{
+function authxlogin(bytes32 jwthash,address contractadd) external{
 require(addidhash[jwthash] == 0,"jwt already used!");
 string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
 addjhash[y]=jwthash;
 addidhash[jwthash]=bytes32("none");
+votingdone[jwthash]=false;
 }
-function nodeaddreq(string memory organisation,string memory noderpc) public {
+function nodeaddreq(string memory organisation,string memory noderpc) external {
 for (uint x=0; x<nodes.length; x++) 
 {
  if(keccak256(abi.encodePacked(nodes[x].organisation))==keccak256(abi.encodePacked(organisation))){
@@ -125,6 +128,7 @@ prenoderpc[organisation]=noderpc;
 }  
 
 function authrsign(bytes32 jwthash,bytes32 whois,bytes[] memory _verifysigno,bytes[] memory _whoissigno) public{
+require(votingdone[jwthash]==false,"voting already completed");
 require(_verifysigno.length==nodes.length,"Invalid number of verifier signature");
 require(_whoissigno.length==nodes.length,"Invalid number of whoissigno signature");
  uint jwtvote;
@@ -142,12 +146,13 @@ require(_whoissigno.length==nodes.length,"Invalid number of whoissigno signature
         require(whovote>(nodes.length/2),"auth failed whovote");
 
         addidhash[jwthash]=whois;
+        votingdone[jwthash]=true;
 }
 function op(string memory organisation) public view returns(uint){
   return nodevote[organisation].yesvote;
 }
-function islogin(address contractadd) public view returns(bool){
-string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
+function islogin(address user) external view returns(bool){
+string memory y=string(abi.encodePacked(string(abi.encodePacked(user)),"$",string(abi.encodePacked(msg.sender))));
 if(addjhash[y]==""){
     return false;
 }
@@ -161,19 +166,37 @@ else{
     }
 }
 }
-function logout(address contractadd) public {
-string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
-require(islogin(contractadd)==true,"you are not logged in");
+function iflogin(address user) internal view returns(bool){
+string memory y=string(abi.encodePacked(string(abi.encodePacked(user)),"$",string(abi.encodePacked(msg.sender))));
+if(addjhash[y]==""){
+    return false;
+}
+else{
+    if(addidhash[addjhash[y]]==bytes32("none")){
+        return false;
+    }
+    else{
+        return true;
+    }
+}
+}
+function logout() external {
+string memory y=string(abi.encodePacked(string(abi.encodePacked(tx.origin)),"$",string(abi.encodePacked(msg.sender))));
+require(iflogin(msg.sender)==true,"you are not logged in");
 addjhash[y]="";
 //addidhash[addjhash[y]]=bytes32("none");
 }
 
-function getid(address contractadd) public view returns(bytes32){
-   require(islogin(contractadd)==true,"you are not logged in");
-   string memory y=string(abi.encodePacked(string(abi.encodePacked(msg.sender)),"$",string(abi.encodePacked(contractadd))));
+function getid(address user) external view returns(bytes32){
+   string memory y=string(abi.encodePacked(string(abi.encodePacked(user)),"$",string(abi.encodePacked(msg.sender))));
    return addidhash[addjhash[y]];  
 }
-
+// function gg() external view returns(address){
+//     return msg.sender;
+// }
+// function tg() external view returns(address){
+//     return tx.origin;
+// }
 
 //function whois(address contractadd) public view  
 /* just for testing recoverSigner testing
